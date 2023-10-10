@@ -1,0 +1,34 @@
+From 946bfe14f9d7bfaba457c4815fa98e360c7d7835 Mon Sep 17 00:00:00 2001
+From: Ubuntu <ubuntu@ip-172-31-27-105.ec2.internal>
+Date: Mon, 9 Oct 2023 08:44:21 +0000
+Subject: [PATCH] Add cflags for uclibc
+
+---
+ CMakeLists.txt | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1b98d9d..e094a47 100755
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -78,6 +78,10 @@ if(${BOARD_INGENIC_T31})
+     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-braces -Wno-strict-aliasing -Wno-unused-variable -Wno-unused-but-set-variable -Wno-int-to-pointer-cast -Wno-maybe-uninitialized -Wno-unused-function")
+     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -muclibc")
+ endif()
++if(${USE_MUCLIBC})
++    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=mips32r2 -muclibc")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=mips32r2 -muclibc")
++endif()
+ 
+ if(${USE_POOL_ALLOCATOR_LIB})
+     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--wrap,kvsMalloc -Wl,--wrap,kvsRealloc -Wl,--wrap,kvsCalloc -Wl,--wrap,kvsFree")
+@@ -111,4 +115,4 @@ add_subdirectory(samples)
+ # Add test
+ if(${BUILD_TEST})
+     add_subdirectory(tests)
+-endif()
+\ No newline at end of file
++endif()
+-- 
+2.25.1
+

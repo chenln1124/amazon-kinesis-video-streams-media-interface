@@ -18,14 +18,7 @@
 #include "com/amazonaws/kinesis/video/capturer/AudioCapturer.h"
 
 #include "T31Common.h"
-#include <imp/imp_audio.h>
-#include <imp/imp_system.h>
-
-#define T31_MIC_DEV_ID       1
-#define T31_MIC_CHN_ID       0
-#define T31_MIC_DEFAULT_VOL  50
-#define T31_MIC_DEFAULT_GAIN 10
-#define T31_MIC_ENC_CHN_ID   0
+#include "sample-common.h"
 
 #define T31_HANDLE_GET(x) T31AudioCapturer* t31Handle = (T31AudioCapturer*) ((x))
 
@@ -37,6 +30,8 @@ typedef struct {
     AudioBitDepth bitDepth;
     AudioSampleRate sampleRate;
 } T31AudioCapturer;
+
+extern ipc_av_config av_config[E_HAL_AV_CHN_MAX];
 
 static int setStatus(AudioCapturerHandle handle, const AudioCapturerStatus newStatus)
 {
@@ -63,7 +58,7 @@ AudioCapturerHandle audioCapturerCreate(void)
     memset(t31Handle, 0, sizeof(T31AudioCapturer));
 
     // Now implementation supports raw PCM, G.711 ALAW and ULAW, MONO, 8k/16k, 16 bits
-    t31Handle->capability.formats = (1 << (AUD_FMT_G711A - 1)) | (1 << (AUD_FMT_G711U - 1)) | (1 << (AUD_FMT_PCM - 1));
+    t31Handle->capability.formats = (1 << (AUD_FMT_G711A - 1)) | (1 << (AUD_FMT_G711U - 1)) | (1 << (AUD_FMT_PCM - 1)) | (1 << (AUD_FMT_AAC - 1));
     t31Handle->capability.channels = (1 << (AUD_CHN_MONO - 1));
     t31Handle->capability.sampleRates = (1 << (AUD_SAM_8K - 1)) | (1 << (AUD_SAM_16K - 1));
     t31Handle->capability.bitDepths = (1 << (AUD_BIT_16 - 1));
@@ -105,27 +100,18 @@ int audioCapturerSetFormat(AudioCapturerHandle handle, const AudioFormat format,
 
     T31_HANDLE_STATUS_CHECK(t31Handle, AUD_CAP_STATUS_STREAM_OFF);
 
-    IMPAudioEncChnAttr chnAttr = {
-        .bufSize = 2,
-    };
-
-    IMPAudioIOAttr ioAttr = {
-        .frmNum = 2,
-        .numPerFrm = 400,
-        .chnCnt = 1,
-    };
-
     switch (format) {
-        case AUD_FMT_PCM:
-            chnAttr.type = PT_PCM;
-            break;
-
         case AUD_FMT_G711A:
-            chnAttr.type = PT_G711A;
+            av_config[E_HAL_AUDIO_AI_CHN_MAIN].audio_conf.enc_type = IPC_AUDIO_ENCTYPE_G711A;
             break;
-
         case AUD_FMT_G711U:
-            chnAttr.type = PT_G711U;
+            av_config[E_HAL_AUDIO_AI_CHN_MAIN].audio_conf.enc_type = IPC_AUDIO_ENCTYPE_G711U;
+            break;
+        case AUD_FMT_PCM:
+            av_config[E_HAL_AUDIO_AI_CHN_MAIN].audio_conf.enc_type = IPC_AUDIO_ENCTYPE_PCM;
+            break;
+        case AUD_FMT_AAC:
+            av_config[E_HAL_AUDIO_AI_CHN_MAIN].audio_conf.enc_type = IPC_AUDIO_ENCTYPE_AACLC;
             break;
 
         default:
@@ -135,7 +121,6 @@ int audioCapturerSetFormat(AudioCapturerHandle handle, const AudioFormat format,
 
     switch (channel) {
         case AUD_CHN_MONO:
-            ioAttr.soundmode = AUDIO_SOUND_MODE_MONO;
             break;
 
         default:
@@ -145,11 +130,10 @@ int audioCapturerSetFormat(AudioCapturerHandle handle, const AudioFormat format,
 
     switch (sampleRate) {
         case AUD_SAM_8K:
-            ioAttr.samplerate = AUDIO_SAMPLE_RATE_8000;
+            av_config[E_HAL_AUDIO_AI_CHN_MAIN].audio_conf.samplerate = AUDIO_SAMPLE_RATE_8K;
             break;
-
         case AUD_SAM_16K:
-            ioAttr.samplerate = AUDIO_SAMPLE_RATE_16000;
+            av_config[E_HAL_AUDIO_AI_CHN_MAIN].audio_conf.samplerate = AUDIO_SAMPLE_RATE_16K;
             break;
 
         default:
@@ -159,24 +143,12 @@ int audioCapturerSetFormat(AudioCapturerHandle handle, const AudioFormat format,
 
     switch (bitDepth) {
         case AUD_BIT_16:
-            ioAttr.bitwidth = AUDIO_BIT_WIDTH_16;
+            av_config[E_HAL_AUDIO_AI_CHN_MAIN].audio_conf.bitwidth = AUDIO_BITWIDTH_16;
             break;
 
         default:
             LOG("Unsupported bit depth %d", bitDepth);
             return -EINVAL;
-    }
-
-    if (IMP_AI_SetPubAttr(T31_MIC_DEV_ID, &ioAttr)) {
-        LOG("IMP_AI_SetPubAttr failed");
-        return -EAGAIN;
-    }
-
-    // Make sure T31_MIC_ENC_CHN_ID is not occupied
-    IMP_AENC_DestroyChn(T31_MIC_ENC_CHN_ID);
-    if (IMP_AENC_CreateChn(T31_MIC_ENC_CHN_ID, &chnAttr)) {
-        LOG("IMP_AENC_CreateChn failed");
-        return -EAGAIN;
     }
 
     t31Handle->format = format;
@@ -206,35 +178,6 @@ int audioCapturerAcquireStream(AudioCapturerHandle handle)
     T31_HANDLE_NULL_CHECK(handle);
     T31_HANDLE_GET(handle);
 
-    if (IMP_AI_Enable(T31_MIC_DEV_ID)) {
-        LOG("IMP_AI_Enable failed");
-        return -EAGAIN;
-    }
-
-    IMPAudioIChnParam chnParam = {
-        .usrFrmDepth = 2,
-    };
-
-    if (IMP_AI_SetChnParam(T31_MIC_DEV_ID, T31_MIC_CHN_ID, &chnParam)) {
-        LOG("IMP_AI_SetChnParam failed");
-        return -EAGAIN;
-    }
-
-    if (IMP_AI_EnableChn(T31_MIC_DEV_ID, T31_MIC_CHN_ID)) {
-        LOG("IMP_AI_EnableChn failed");
-        return -EAGAIN;
-    }
-
-    if (IMP_AI_SetVol(T31_MIC_DEV_ID, T31_MIC_CHN_ID, T31_MIC_DEFAULT_VOL)) {
-        LOG("IMP_AI_SetVol failed");
-        return -EAGAIN;
-    }
-
-    if (IMP_AI_SetGain(T31_MIC_DEV_ID, T31_MIC_CHN_ID, T31_MIC_DEFAULT_GAIN)) {
-        LOG("IMP_AI_SetGain failed");
-        return -EAGAIN;
-    }
-
     return setStatus(handle, AUD_CAP_STATUS_STREAM_ON);
 }
 
@@ -251,51 +194,23 @@ int audioCapturerGetFrame(AudioCapturerHandle handle, void* pFrameDataBuffer, co
     }
 
     int ret = 0;
-    IMPAudioFrame rawFrame = {0};
 
-    if (IMP_AI_PollingFrame(T31_MIC_DEV_ID, T31_MIC_CHN_ID, T31_POLLING_STREAM_TIMEOUT_MS)) {
-        LOG("IMP_AI_PollingFrame failed");
-        return -EAGAIN;
+    char frame_type[5][10] = {"", "I", "P", "B", "A"};
+    Hal_frame_head_t frame_head = {0};
+
+    memset(&frame_head, 0, sizeof(frame_head));
+    memset(pFrameDataBuffer, 0, frameDataBufferSize);
+    ret = Hal_get_stream_from_codec(E_HAL_AUDIO_AI_CHN_MAIN, &frame_head, pFrameDataBuffer, frameDataBufferSize, 20);
+    if (ret == 0) {
+        *pFrameSize = frame_head.frame_size;
+        *pTimestamp = getEpochTimestampInUs();
+        // sdk_stream_write_stream("./audio.aac", pFrameDataBuffer, frame_head.frame_size);
+        // printf("audio stream, channel:main frame_type:%s frame_size:%d frame_pts:%lld frame_no:%d, timestamp: %lld\n",
+        //     frame_type[frame_head.frame_type], frame_head.frame_size, frame_head.pts, frame_head.frame_no, *pTimestamp);
     }
-
-    // Get raw PCM
-    if (IMP_AI_GetFrame(T31_MIC_DEV_ID, T31_MIC_CHN_ID, &rawFrame, BLOCK)) {
-        LOG("IMP_AI_GetFrame failed");
-        return -EAGAIN;
+    else {
+        ret = -EAGAIN;
     }
-
-    // Encode frame
-    if (t31Handle->format != AUD_FMT_PCM) {
-        // Need to encode
-        IMPAudioStream encodeStream = {0};
-
-        if (IMP_AENC_SendFrame(T31_MIC_ENC_CHN_ID, &rawFrame)) {
-            LOG("IMP_AENC_SendFrame failed");
-            ret = -EAGAIN;
-        } else if (IMP_AENC_PollingStream(T31_MIC_ENC_CHN_ID, T31_POLLING_STREAM_TIMEOUT_MS)) {
-            LOG("IMP_AENC_PollingStream failed");
-            ret = -EAGAIN;
-        } else if (IMP_AENC_GetStream(T31_MIC_ENC_CHN_ID, &encodeStream, BLOCK)) {
-            LOG("IMP_AENC_GetStream failed");
-            ret - EAGAIN;
-        } else if (frameDataBufferSize < encodeStream.len) {
-            LOG("FrameDataBufferSize(%d) < frameSize(%d), frame dropped", frameDataBufferSize, encodeStream.len);
-            *pFrameSize = 0;
-            ret = -ENOMEM;
-        } else {
-            memcpy(pFrameDataBuffer, (void*) encodeStream.stream, encodeStream.len);
-            *pFrameSize = encodeStream.len;
-            *pTimestamp = IMP_System_GetTimeStamp();
-        }
-
-        IMP_AENC_ReleaseStream(T31_MIC_ENC_CHN_ID, &encodeStream);
-    } else {
-        memcpy(pFrameDataBuffer, (void*) rawFrame.virAddr, rawFrame.len);
-        *pFrameSize = rawFrame.len;
-        *pTimestamp = IMP_System_GetTimeStamp();
-    }
-
-    IMP_AI_ReleaseFrame(T31_MIC_DEV_ID, T31_MIC_CHN_ID, &rawFrame);
 
     return ret;
 }
@@ -306,16 +221,6 @@ int audioCapturerReleaseStream(AudioCapturerHandle handle)
     T31_HANDLE_GET(handle);
 
     T31_HANDLE_STATUS_CHECK(t31Handle, AUD_CAP_STATUS_STREAM_ON);
-
-    if (IMP_AI_DisableChn(T31_MIC_DEV_ID, T31_MIC_CHN_ID)) {
-        LOG("Audio channel disable failed");
-        return -EAGAIN;
-    }
-
-    if (IMP_AI_Disable(T31_MIC_DEV_ID)) {
-        LOG("Audio device disable failed");
-        return -EAGAIN;
-    }
 
     return setStatus(handle, AUD_CAP_STATUS_STREAM_OFF);
 }
@@ -329,10 +234,6 @@ void audioCapturerDestroy(AudioCapturerHandle handle)
 
     if (t31Handle->status == AUD_CAP_STATUS_STREAM_ON) {
         audioCapturerReleaseStream(handle);
-    }
-
-    if (IMP_AENC_DestroyChn(T31_MIC_ENC_CHN_ID)) {
-        LOG("Encode channel disable failed");
     }
 
     setStatus(handle, AUD_CAP_STATUS_NOT_READY);

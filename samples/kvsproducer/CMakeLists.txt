@@ -10,12 +10,14 @@ message(STATUS "BOARD_LIBS_DIR - ${BOARD_LIBS_DIR}")
 message(STATUS "BOARD_LIBS - ${BOARD_LIBS}")
 message(STATUS "EMBEDDED_MEDIA_INCLUDES_DIR - ${EMBEDDED_MEDIA_INCLUDES_DIR}")
 message(STATUS "EMBEDDED_MEDIA_LINK_DIR - ${EMBEDDED_MEDIA_LINK_DIR}")
+message(STATUS "USE_MUCLIBC - ${USE_MUCLIBC}")
 
 include(ExternalProject)
 ExternalProject_Add(kvs-producer
   GIT_REPOSITORY    https://github.com/aws-samples/amazon-kinesis-video-streams-producer-embedded-c.git
   GIT_TAG           main
-  CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX=${AWS_DEPENDENCIES_DIR}/kvs/ -DCMAKE_BUILD_TYPE=Release
+  CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX=${AWS_DEPENDENCIES_DIR}/kvs/ -DCMAKE_BUILD_TYPE=Release -DUSE_MUCLIBC=${USE_MUCLIBC}
+  PATCH_COMMAND     ${CMAKE_CURRENT_LIST_DIR}/patches/kvsproducer-patch-manager.sh
   BUILD_ALWAYS      TRUE
   GIT_PROGRESS      TRUE
   TEST_COMMAND      ""

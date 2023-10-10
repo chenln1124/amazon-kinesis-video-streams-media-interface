@@ -19,24 +19,6 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#define ATOMIC_INT        volatile size_t
-#define ATOMIC_INT_ADD(x) __sync_add_and_fetch((x), 1)
-#define ATOMIC_INT_SUB(x) __sync_sub_and_fetch((x), 1)
-
-#define ATOMIC_BOOL          volatile bool
-#define ATOMIC_BOOL_TRUE(x)  __sync_or_and_fetch((x), TRUE)
-#define ATOMIC_BOOL_FALSE(x) __sync_and_and_fetch((x), FALSE)
-
-#define MUTEX            pthread_mutex_t
-#define MUTEX_CREATE(x)  pthread_mutex_init((x), NULL)
-#define MUTEX_LOCK(x)    pthread_mutex_lock((x))
-#define MUTEX_UNLOCK(x)  pthread_mutex_unlock((x))
-#define MUTEX_DESTORY(x) pthread_mutex_destroy((x))
-
-#define THREAD                                  pthread_t
-#define THREAD_CREATE(thread, threadFunc, args) pthread_create((thread), NULL, (threadFunc), (args))
-#define THREAD_JOIN(thread, threadReturn)       pthread_join((thread), (threadReturn))
-
 #define LOG(msg, ...) printf(msg "\n", ##__VA_ARGS__)
 
 #define T31_HANDLE_NULL_CHECK(x)                                                                                                                     \
