@@ -399,6 +399,7 @@ PVOID sendAudioPackets(PVOID args)
     int getFrameStatus = 0;
     while (!ATOMIC_LOAD_BOOL(&pSampleConfiguration->appTerminateFlag)) {
         getFrameStatus = audioCapturerGetFrame(audioCapturerHandle, pFrameBuffer, AUDIO_FRAME_BUFFER_SIZE_BYTES, &timestamp, &frameSize);
+        // getFrameStatus = -EAGAIN;
         switch (getFrameStatus) {
             case 0:
                 // successfully get a frame

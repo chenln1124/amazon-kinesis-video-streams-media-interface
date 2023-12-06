@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(USE_MUCLIBC "Use muclibc" OFF)
+set(SRCBOARD ${BOARD})
 
 # Board Specific Parts Start
 if(NOT BOARD OR BOARD STREQUAL "")
@@ -17,6 +18,11 @@ elseif(BOARD STREQUAL "FILE")
     message(STATUS "Selected board FILE")
 elseif(BOARD STREQUAL "V4L2")
     message(STATUS "Selected board V4L2")
+elseif(BOARD STREQUAL "C610")
+    message(STATUS "Selected board C610")
+    set(SRCBOARD "GSTREAMER")
+elseif(BOARD STREQUAL "GSTREAMER")
+    message(STATUS "Selected board GSTREAMER")
 elseif(BOARD STREQUAL "T31")
     message(STATUS "Selected board T31")
 elseif(BOARD STREQUAL "FH8626V100")
@@ -47,9 +53,9 @@ set(INCS
     ${INCS_DIR}/com/amazonaws/kinesis/video/player/AudioPlayer.h
 )
 set(SRCS
-    ${CMAKE_CURRENT_LIST_DIR}/source/${BOARD}/${BOARD}VideoCapturer.c
-    ${CMAKE_CURRENT_LIST_DIR}/source/${BOARD}/${BOARD}AudioCapturer.c
-    ${CMAKE_CURRENT_LIST_DIR}/source/${BOARD}/${BOARD}AudioPlayer.c
+    ${CMAKE_CURRENT_LIST_DIR}/source/${SRCBOARD}/${SRCBOARD}VideoCapturer.c
+    ${CMAKE_CURRENT_LIST_DIR}/source/${SRCBOARD}/${SRCBOARD}AudioCapturer.c
+    ${CMAKE_CURRENT_LIST_DIR}/source/${SRCBOARD}/${SRCBOARD}AudioPlayer.c
 )
 
 if(NOT BOARD_DESTINATION_PLATFORM OR BOARD_DESTINATION_PLATFORM STREQUAL "")
@@ -81,6 +87,17 @@ target_link_directories(embedded-media-shared PUBLIC ${BOARD_LIBS_DIR})
 target_link_libraries(embedded-media-shared PRIVATE ${BOARD_LIBS_SHARED})
 set_target_properties(embedded-media-shared PROPERTIES PUBLIC_HEADER "${INCS}")
 set_target_properties(embedded-media-shared PROPERTIES OUTPUT_NAME embedded-media)
+
+if(BOARD STREQUAL "C610" OR BOARD STREQUAL "GSTREAMER")
+    add_definitions(-DUSE_GSTREAMER)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+    pkg_check_modules(GSTAPP REQUIRED gstreamer-app-1.0)
+    target_include_directories(embedded-media-static PRIVATE ${GSTREAMER_INCLUDE_DIRS} ${GSTAPP_INCLUDE_DIRS})
+    target_link_libraries(embedded-media-static ${GSTREAMER_LIBRARIES} ${GSTAPP_LIBRARIES})
+    target_include_directories(embedded-media-shared PRIVATE ${GSTREAMER_INCLUDE_DIRS} ${GSTAPP_INCLUDE_DIRS})
+    target_link_libraries(embedded-media-shared ${GSTREAMER_LIBRARIES} ${GSTAPP_LIBRARIES})
+endif()
 
 if(NOT FRAME_FILE_PATH_PREFIX OR FRAME_FILE_PATH_PREFIX STREQUAL "")
     set(FRAME_FILE_PATH_PREFIX ${CMAKE_CURRENT_LIST_DIR}/resources/frames/)
